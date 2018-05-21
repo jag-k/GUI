@@ -1,3 +1,6 @@
+__author__ = "Jag_k"
+__github__ = "https://github.com/jag-k"
+
 from PIL import Image
 import pygame
 from pygame.locals import *
@@ -17,8 +20,8 @@ def to_color(color):
     return pygame.Color(color)
 
 
-def split_line(text, width, font):
 
+def split_line(text, width, font):
     def if_in_rect(t):
         return font.render(t, 1, to_color('black')).get_rect().width <= width
 
@@ -38,26 +41,26 @@ def split_line(text, width, font):
 
 class GUI:
     def __init__(self, *elemets):
-        self.element = list(elemets)
+        self.elements = list(elemets)
         self.active_tb = len(self.textbox_list)-1
         self.check = True
 
     @property
     def textbox_list(self):
-        return list(filter(lambda x: type(x) is TextBox, self.element))
+        return list(filter(lambda x: type(x) is TextBox, self.elements))
 
-    def add_element(self, *element):
-        self.element += element
+    def add_element(self, *elements):
+        self.elements += elements
         return self
 
     def render(self, surface, text=None):
-        for i in self.element:
+        for i in self.elements:
             render = getattr(i, "render", None)
             if callable(render):
                 i.render(surface)
 
     def update(self):
-        for i in self.element:
+        for i in self.elements:
             render = getattr(i, "update", None)
             if callable(render):
                 i.update()
@@ -78,7 +81,7 @@ class GUI:
         # print('\r%d' % self.active_tb, end='', flush=True)
 
     def get_event(self, event):
-        for i in self.element:
+        for i in self.elements:
             get_event = getattr(i, "get_event", None)
             if callable(get_event):
                 i.get_event(event)
@@ -88,8 +91,17 @@ class GUI:
             self.check = True
 
     def delete(self, item):
-        if item in self.element:
-            del self.element[self.element.index(item)]
+        if item in self.elements:
+            del self.elements[self.elements.index(item)]
+    
+    def __len__(self):
+        return len(self.elements)
+
+    def __iter__(self):
+        return iter(self.elements)
+
+    def __str__(self):
+        return "<GUI with %d element(s)>" % len(self)
 
 
 class OldLabel:
@@ -256,7 +268,8 @@ class TextBox(OldLabel):
 
 class Button(OldLabel):
     def __init__(self, rect, text, text_color='gray', bg_color=pygame.Color('blue'),
-                 active_color=pygame.Color("lightblue"), active=True, click_event=(lambda self: self)):
+                 active_color=pygame.Color("lightblue"), active=True, click_event=(lambda self: self),
+                 draw_border=True):
         super().__init__(rect, text, text_color=text_color, bg_color=bg_color, text_position='center')
         self.active_color = to_color(active_color)
         self.color = self.bg_color
@@ -264,6 +277,7 @@ class Button(OldLabel):
         self.active = active
         self.button_up = False
         self.click_event = click_event
+        self.draw_border = draw_border
 
     def __bool__(self):
         if self.button_up and self.active:
@@ -292,11 +306,12 @@ class Button(OldLabel):
             self.rendered_rect = self.rendered_text.get_rect(centerx=self.Rect.centerx + 3,
                                                              centery=self.Rect.centery)
         # рисуем границу
-        pygame.draw.rect(surface, color1, self.Rect, 2)
-        pygame.draw.line(surface, color2, (self.Rect.right - 1, self.Rect.top),
-                         (self.Rect.right - 1, self.Rect.bottom), 2)
-        pygame.draw.line(surface, color2, (self.Rect.left, self.Rect.bottom - 1),
-                         (self.Rect.right, self.Rect.bottom - 1), 2)
+        if self.draw_border:
+            pygame.draw.rect(surface, color1, self.Rect, 2)
+            pygame.draw.line(surface, color2, (self.Rect.right - 1, self.Rect.top),
+                             (self.Rect.right - 1, self.Rect.bottom), 2)
+            pygame.draw.line(surface, color2, (self.Rect.left, self.Rect.bottom - 1),
+                             (self.Rect.right, self.Rect.bottom - 1), 2)
         # выводим текст
         surface.blit(self.rendered_text, self.rendered_rect)
 
