@@ -1,14 +1,20 @@
 __author__ = "Jag_k"
 __github__ = "https://github.com/jag-k"
 
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+import time
+
 import pygame
 from pygame.locals import *
-import time
+
 pygame.init()
 
 
-def to_color(color):
+def to_color(color) -> pygame.Color:
     if color is None:
         return None
     if color == -1:
@@ -20,7 +26,6 @@ def to_color(color):
     return pygame.Color(color)
 
 
-
 def split_line(text, width, font):
     def if_in_rect(t):
         return font.render(t, 1, to_color('black')).get_rect().width <= width
@@ -30,8 +35,8 @@ def split_line(text, width, font):
         if w > width:
             new = ''
             index = 0
-            while if_in_rect(' '.join(text.split()[:index+1])):
-                new = ' '.join(text.split()[:index+1])
+            while if_in_rect(' '.join(text.split()[:index + 1])):
+                new = ' '.join(text.split()[:index + 1])
                 index += 1
             return [new] + split_line(' '.join(text.split()[index:]), width, font)
         return [' '.join(text.split())]
@@ -40,9 +45,9 @@ def split_line(text, width, font):
 
 
 class GUI:
-    def __init__(self, *elemets):
-        self.elements = list(elemets)
-        self.active_tb = len(self.textbox_list)-1
+    def __init__(self, *elements):
+        self.elements = list(map(lambda x: type(x) == GUIElement, elements))
+        self.active_tb = len(self.textbox_list) - 1
         self.check = True
 
     @property
@@ -50,7 +55,7 @@ class GUI:
         return list(filter(lambda x: type(x) is TextBox, self.elements))
 
     def add_element(self, *elements):
-        self.elements += elements
+        self.elements += list(map(lambda x: type(x) == GUIElement, elements))
         return self
 
     def render(self, surface, text=None):
@@ -85,7 +90,7 @@ class GUI:
             get_event = getattr(i, "get_event", None)
             if callable(get_event):
                 i.get_event(event)
-        if event.type == pygame.KEYDOWN and event.key == 9 and self.textbox_list:
+        if event.type == KEYDOWN and event.key == K_TAB and self.textbox_list:
             self.active_tb += 1
             self.active_tb = self.active_tb % len(self.textbox_list)
             self.check = True
@@ -93,7 +98,10 @@ class GUI:
     def delete(self, item):
         if item in self.elements:
             del self.elements[self.elements.index(item)]
-    
+
+    def __delitem__(self, key):
+        self.delete(key)
+
     def __len__(self):
         return len(self.elements)
 
@@ -104,14 +112,23 @@ class GUI:
         return "<GUI with %d element(s)>" % len(self)
 
 
-class OldLabel:
-    def __init__(self, rect, text, text_color='gray', bg_color=-1, text_position='left'):
+class GUIElement:
+    def __init__(self, *args, **kwargs):
+        self.gui = None
+    
+    def add_gui(self, gui):
+        self.gui = gui
+
+
+class OldLabel(GUIElement):
+    def __init__(self, rect, text, text_color='gray', bg_color=-1, text_position='left', font=None):
+        super().__init__()
         self.Rect = pygame.Rect(rect)
         self.text = text
         self.text_pos = text_position
         self.font_color = to_color(text_color)
         self.bg_color = None if bg_color == -1 else to_color(bg_color)
-        self.font = pygame.font.Font(None, self.Rect.height - 4)
+        self.font = pygame.font.Font(font, self.Rect.height - 4)
         self.rendered_text = None
         self.rendered_rect = None
 
@@ -134,9 +151,10 @@ class OldLabel:
         surface.blit(self.rendered_text, self.rendered_rect)
 
 
-class Label:
+class Label(GUIElement):
     def __init__(self, rect, text, text_color='gray', bg_color=-1, text_position='left',
-                 line_spacing=5, font_size=None, auto_line_break=False, real_fill_bg=False):
+                 line_spacing=5, font_size=None, font=None, auto_line_break=False, real_fill_bg=False):
+        super().__init__()
 
         self.Rect = pygame.Rect(rect)
         self.text = text
@@ -151,7 +169,7 @@ class Label:
         font_size = self.Rect.height // len(text) - 4 - len(text) * line_spacing + line_spacing if font_size is None \
             else font_size
 
-        self.font = pygame.font.Font(None, font_size)
+        self.font = pygame.font.Font(font, font_size)
         self.line_spacing = line_spacing
 
     def render(self, surface, text=None):
@@ -167,7 +185,7 @@ class Label:
         end_pos = [self.Rect.x, self.Rect.y]
 
         for j in text:
-            for i in (split_line(j, self.Rect.width - 4, self.font) if self.line_break else (j, )):
+            for i in (split_line(j, self.Rect.width - 4, self.font) if self.line_break else (j,)):
                 rendered_text = self.font.render(i, 1, self.font_color)
                 rendered_rect = rendered_text.get_rect(x=self.Rect.x + 2, y=self.Rect.y + 2 + step)
 
@@ -185,13 +203,13 @@ class Label:
             bg.fill(self.bg_color, (start_pos, tuple(map(lambda x: x + 2, end_pos))))
             surface.blit(bg, (0, 0))
 
-        surface.blit(screen,  (0, 0))
+        surface.blit(screen, (0, 0))
 
 
 class TextBox(OldLabel):
     def __init__(self, rect, text, max_len=None, execute=(lambda self: self.set_focus()), placeholder=None,
-                 bg_color='white', text_color='gray'):
-        super().__init__(rect, text, text_color=text_color, bg_color=bg_color)
+                 bg_color='white', text_color='gray', font=None):
+        super().__init__(rect, text, text_color=text_color, bg_color=bg_color, font=font)
         self.focus = False
         self.blink = True
         self.blink_timer = 0
@@ -207,25 +225,25 @@ class TextBox(OldLabel):
 
     @property
     def get_text(self):
-        return [self.text[:len(self.text)-self.shift] if self.shift else self.text,
-                self.text[len(self.text)-self.shift:]]
+        return [self.text[:len(self.text) - self.shift] if self.shift else self.text,
+                self.text[len(self.text) - self.shift:]]
 
     def get_event(self, event):
-        if event.type == pygame.KEYDOWN and self.focus:
-            if event.key == pygame.K_ESCAPE:
+        if event.type == KEYDOWN and self.focus:
+            if event.key == K_ESCAPE:
                 self.focus = False
                 return None
             text = self.get_text
-            if event.key in (pygame.K_KP_ENTER, pygame.K_RETURN, 27):
+            if event.key in (K_KP_ENTER, K_RETURN, 27):
                 self.execute(self)
-            elif event.key == pygame.K_BACKSPACE:
+            elif event.key == K_BACKSPACE:
                 self.text = text[0][:-1] + text[1]
 
-            elif event.key == pygame.K_DELETE:
+            elif event.key == K_DELETE:
                 self.text = text[0] + text[1][1:]
                 self.shift -= int(bool(self.shift))
 
-            elif event.key in (pygame.K_LEFT, pygame.K_RIGHT):
+            elif event.key in (K_LEFT, K_RIGHT):
                 if event.key % 2:
                     self.shift -= int(self.shift > 0)
                 else:
@@ -240,7 +258,7 @@ class TextBox(OldLabel):
             if self.focus:
                 t = ''
                 in_text = False
-                for i in self.text+' ':
+                for i in self.text + ' ':
                     rect = self.font.render(t, 1, self.font_color).get_rect(x=self.Rect.x + 2,
                                                                             centery=self.Rect.centery)
                     if rect.collidepoint(*event.pos):
@@ -249,6 +267,9 @@ class TextBox(OldLabel):
                         break
                     t += i
                 self.shift = 0 if not in_text else self.shift
+
+    def set_focus(self, focus=None):
+        self.focus = not self.focus if focus is not None else bool(focus)
 
     def update(self):
         if pygame.time.get_ticks() - self.blink_timer > 200:
@@ -269,8 +290,8 @@ class TextBox(OldLabel):
 class Button(OldLabel):
     def __init__(self, rect, text, text_color='gray', bg_color=pygame.Color('blue'),
                  active_color=pygame.Color("lightblue"), active=True, click_event=(lambda self: self),
-                 draw_border=True):
-        super().__init__(rect, text, text_color=text_color, bg_color=bg_color, text_position='center')
+                 draw_border=True, font=None):
+        super().__init__(rect, text, text_color=text_color, bg_color=bg_color, text_position='center', font=font)
         self.active_color = to_color(active_color)
         self.color = self.bg_color
         self.pressed = False
@@ -290,8 +311,8 @@ class Button(OldLabel):
         text = ''
         for t in self.text:
             text += t
-            if self.font.size(text+'...')[0] > self.Rect.width - 7 or self.font.size(text)[0] > self.Rect.width:
-                text = text+('...' if not text.startswith(self.text) else '')
+            if self.font.size(text + '...')[0] > self.Rect.width - 7 or self.font.size(text)[0] > self.Rect.width:
+                text = text + ('...' if not text.startswith(self.text) else '')
                 break
         self.rendered_text = self.font.render(text, 1, self.font_color)
 
@@ -328,14 +349,15 @@ class Button(OldLabel):
             self.color = self.active_color if self.Rect.collidepoint(*event.pos) else self.bg_color
 
 
-class Checkbox:
+class Checkbox(GUIElement):
     def __init__(self, rect, text, text_color='white', box_color='blue', if_work=True,
-                 click_event=(lambda x: x)):
+                 click_event=(lambda x: x), font=None):
+        super().__init__()
         self.Rect = rect if type(rect) is pygame.Rect else pygame.Rect(rect)
         self.text = text
         self.color = to_color(box_color)
         self.font_color = to_color(text_color)
-        self.font = pygame.font.Font(None, self.Rect.height - 4)
+        self.font = pygame.font.Font(font, self.Rect.height - 4)
         self.rendered_text = None
         self.rendered_rect = None
         self.pressed = False
@@ -370,8 +392,8 @@ class Checkbox:
 
 class Checkbox2(Checkbox):
     def __init__(self, rect, text, space=5, text_color='white', box_color='blue', if_work=True,
-                 click_event=(lambda x: x)):
-        super().__init__(rect, text, text_color, box_color, if_work, click_event)
+                 click_event=(lambda x: x), font=None):
+        super().__init__(rect, text, text_color, box_color, if_work, click_event, font)
         self.space = space
 
     def render(self, surface, text=None, status=None):
@@ -387,11 +409,13 @@ class Checkbox2(Checkbox):
                                                    r.width - self.space * 2, r.height - self.space * 2))
 
 
-"""GIFImage by Matthew Roe"""
+class GIFImage:
+    """GIFImage by Matthew Roe"""
 
-
-class GIFImage(object):
     def __init__(self, filename):
+        if not Image:
+            raise ImportError("Please, install PIL lib: pip install pillow")
+
         self.filename = filename
         self.image = Image.open(filename)
         self.frames = []
@@ -401,7 +425,7 @@ class GIFImage(object):
         self.ptime = time.time()
 
         self.running = True
-        self.breakpoint = len(self.frames)-1
+        self.breakpoint = len(self.frames) - 1
         self.startpoint = 0
         self.reversed = False
 
@@ -414,7 +438,7 @@ class GIFImage(object):
         pal = image.getpalette()
         base_palette = []
         for i in range(0, len(pal), 3):
-            rgb = pal[i:i+3]
+            rgb = pal[i:i + 3]
             base_palette.append(rgb)
 
         all_tiles = []
@@ -424,7 +448,7 @@ class GIFImage(object):
                     image.seek(0)
                 if image.tile:
                     all_tiles.append(image.tile[0][3][0])
-                image.seek(image.tell()+1)
+                image.seek(image.tell() + 1)
         except EOFError:
             image.seek(0)
 
@@ -455,13 +479,13 @@ class GIFImage(object):
                         pal = image.getpalette()
                         palette = []
                         for i in range(0, len(pal), 3):
-                            rgb = pal[i:i+3]
+                            rgb = pal[i:i + 3]
                             palette.append(rgb)
                     elif all_tiles in ((7, 8), (8, 7)):
                         pal = image.getpalette()
                         palette = []
                         for i in range(0, len(pal), 3):
-                            rgb = pal[i:i+3]
+                            rgb = pal[i:i + 3]
                             palette.append(rgb)
                     else:
                         palette = base_palette
@@ -475,11 +499,11 @@ class GIFImage(object):
                 pi2 = pygame.Surface(image.size, SRCALPHA)
                 if cons:
                     for i in self.frames:
-                        pi2.blit(i[0], (0,0))
-                pi2.blit(pi, (x0, y0), (x0, y0, x1-x0, y1-y0))
+                        pi2.blit(i[0], (0, 0))
+                pi2.blit(pi, (x0, y0), (x0, y0, x1 - x0, y1 - y0))
 
                 self.frames.append([pi2, duration])
-                image.seek(image.tell()+1)
+                image.seek(image.tell() + 1)
         except EOFError:
             pass
 
@@ -504,7 +528,7 @@ class GIFImage(object):
         if self.cur < 0:
             self.cur = 0
         if self.cur >= len(self.frames):
-            self.cur = len(self.frames)-1
+            self.cur = len(self.frames) - 1
 
     def set_bounds(self, start, end):
         if start < 0:
@@ -530,7 +554,7 @@ class GIFImage(object):
         self.seek(0)
 
     def fastforward(self):
-        self.seek(self.length()-1)
+        self.seek(self.length() - 1)
 
     def get_height(self):
         return self.image.size[1]
@@ -561,3 +585,6 @@ class GIFImage(object):
         new.ptime = self.ptime
         new.reversed = self.reversed
         return new
+
+
+# TODO: Create examples
